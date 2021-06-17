@@ -25,11 +25,16 @@ def btnhandler(update: Update, context: CallbackContext) -> None:
     query.answer()
     data = query.data.split(",")
     if data[0] == 'play':
-        query.edit_message_text(text=f"play {urlinfo[3]} on {data[2]}")
-        play(data[1])
+        if play(data[1]) == 0:
+            query.edit_message_text(text=f"play {urlinfo[3]} on {data[2]}")
+        else:
+            query.edit_message_text(text=f"operation failed on {data[2]}")
+
     if data[0] == 'stop':
-        query.edit_message_text(text=f"stop playing on {data[2]}")
-        stop(data[1])
+        if stop(data[1]) == 0:
+            query.edit_message_text(text=f"stop playing on {data[2]}")
+        else:
+            query.edit_message_text(text=f"operation failed on {data[2]}")
 
 def geturl(update: Update, context: CallbackContext) -> None:
     if browser.count == 0:
@@ -58,39 +63,57 @@ def status(update: Update, context: CallbackContext) -> None:
     keyboard = []
     states = []
     for uuid, service in browser.services.items():
+        state = getstatus(str(uuid))
+        states.append(state)
+        if state[1] == True:
+            continue
         data = ",".join(['stop',str(uuid),str(service.friendly_name)])
         keyboard.append([InlineKeyboardButton(format(service.friendly_name), callback_data=data)])
-        states.append(getstatus(str(uuid)))
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    update.message.reply_text(str(states)+"\n\n"+'Stop playing on:', reply_markup=reply_markup)
+    if keyboard.count == 0:
+        update.message.reply_text(str(states))
+    else:
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        # this is ugly, I think I'll just bear with it until I've learned how to do the string things. other codes are ugly too btw :)
+        update.message.reply_text(str(states)+"\n\n"+'Stop playing on:', reply_markup=reply_markup)
 
-def play(uuid:str):
+def play(uuid:str) -> int:
     device = browser.services[UUID(uuid)]
     cast = pychromecast.get_chromecast_from_cast_info(device, zconf)
-    cast.wait()
+    cast.wait(3)
     sleep(2)
-    cast.media_controller.play_media(urlinfo[1],urlinfo[2],urlinfo[3])
-    cast.media_controller.block_until_active()
-    cast.media_controller.play()
-    cast.disconnect()
+    try:
+        cast.media_controller.play_media(urlinfo[1],urlinfo[2],urlinfo[3])
+        cast.media_controller.block_until_active()
+        cast.media_controller.play()
+        cast.disconnect()
+        return 0
+    except:
+        cast.disconnect()
+        return 1
 
-def stop(uuid:str):
+def stop(uuid:str) -> int:
     device = browser.services[UUID(uuid)]
     cast = pychromecast.get_chromecast_from_cast_info(device, zconf)
-    cast.wait()
+    cast.wait(3)
     sleep(2)
-    cast.quit_app()
-    cast.disconnect()
+    try:
+        cast.quit_app()
+        cast.disconnect()
+        return 0
+    except:
+        cast.disconnect()
+        return 1
 
 def getstatus(uuid:str) -> list:
     device = browser.services[UUID(uuid)]
     cast = pychromecast.get_chromecast_from_cast_info(device, zconf)
-    cast.wait()
-    sleep(2)
+    cast.wait(3)
+    sleep(3)
     mc = cast.media_controller.status
     state = [cast.name,cast.is_idle,mc.title,mc.content_id,mc.content_type]
     cast.disconnect()
     return state
+
 
 def parseurl(url: str) -> list:
     try:
