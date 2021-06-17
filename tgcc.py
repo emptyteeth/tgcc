@@ -18,7 +18,7 @@ class MyCastListener(pychromecast.discovery.AbstractCastListener):
         pass
 
 def help(update: Update, context: CallbackContext) -> None:
-    update.message.reply_text('Just send the url you funk')
+    update.message.reply_text("Send the audio url to play\nSend status command to get device status and a button to stop the playing")
 
 def btnhandler(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
