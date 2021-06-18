@@ -9,6 +9,12 @@ a simple(rough) chromecast telegram bot
 
 ## Usage
 
+- Send audio url
+- Share radio station from [radio garden APP](https://play.google.com/store/apps/details?id=com.jonathanpuckey.radiogarden)
+- `/status` check device status
+
+## Run
+
 - local
 
   ```shell
