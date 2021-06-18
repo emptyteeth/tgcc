@@ -6,6 +6,7 @@ from urllib import request
 from time import sleep
 from os import environ, getenv
 from uuid import UUID
+from pychromecast.controllers.bubbleupnp import BubbleUPNPController
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import Updater, MessageHandler, Filters, CallbackQueryHandler, CallbackContext,CommandHandler
 
@@ -33,7 +34,7 @@ def geturl(update: Update, context: CallbackContext) -> None:
     url = update.message.text
     global urlinfo
     urlinfo = parseurl(url)
-    if urlinfo[0] == 0:
+    if urlinfo[0] == 1:
         update.message.reply_text('bad url')
         return
     if not urlinfo[2].startswith('audio'):
@@ -51,7 +52,7 @@ def rgurl(update: Update, context: CallbackContext) -> None:
     url = 'https://radio.garden/api/ara/content/listen/'+update.message.text[-8:]+'/channel.mp3'
     global urlinfo
     urlinfo = parseurl(url)
-    if urlinfo[0] == 0:
+    if urlinfo[0] == 1:
         update.message.reply_text('bad url')
         return
     if not urlinfo[2].startswith('audio'):
@@ -118,19 +119,26 @@ class wtf():
         self.cast = pychromecast.get_chromecast_from_cast_info(device, zconf)
         self.cast.wait(3)
         sleep(2)
+
     def play(self) -> int:
         """
         start playing. return int 0->success 1->fail
         """
         try:
-            self.cast.media_controller.play_media(urlinfo[1],urlinfo[2],urlinfo[3])
-            self.cast.media_controller.block_until_active()
-            self.cast.media_controller.play()
+            bubbleupnp = BubbleUPNPController()
+            self.cast.register_handler(bubbleupnp)
+            bubbleupnp.launch()
+            metadata = {'title':urlinfo[3],'metadataType':3}
+            bubbleupnp.play_media(urlinfo[1],urlinfo[2],urlinfo[3],stream_type='LIVE',metadata=metadata)
+            bubbleupnp.block_until_active()
+            sleep(1)
+            bubbleupnp.play()
             self.cast.disconnect()
             return 0
         except:
             self.cast.disconnect()
             return 1
+
     def stop(self) -> int:
         """
         stop playing. return int 0->success 1->fail
@@ -142,6 +150,7 @@ class wtf():
         except:
             self.cast.disconnect()
             return 1
+
     def getstatus(self) -> list:
         """
         return device status.
@@ -162,14 +171,14 @@ def parseurl(url: str) -> list:
         r = request.urlopen(url)
         if r.code != 200:
             r.close()
-            return [0]
+            return [1]
         else:
             h = r.headers
-            result = [1,r.url,h.get('Content-Type'),h.get('icy-name')]
+            result = [0,r.url,h.get('Content-Type'),h.get('icy-name')]
             r.close()
             return result
     except:
-        return [0]
+        return [1]
 
 ##########################################
 
