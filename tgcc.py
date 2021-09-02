@@ -2,8 +2,8 @@
 
 import re
 from time import sleep
-from os import environ, getenv
 from urllib import request
+from os import environ, getenv
 import zeroconf
 import pychromecast
 from pychromecast.discovery import CastInfo
@@ -19,28 +19,44 @@ def devicelist() ->list:
     zconf.close()
     return devices
 
-def deviceplay(info:CastInfo,mediainfo:list):
-    cast = pychromecast.get_chromecast_from_host(
-        [info.host, info.port, info.uuid, info.model_name, info.friendly_name])
-    bubbleupnp = BubbleUPNPController()
-    cast.wait(3)
-    sleep(2)
-    cast.register_handler(bubbleupnp)
-    bubbleupnp.launch()
-    metadata = {'title':mediainfo[3],'metadataType':3}
-    bubbleupnp.play_media(mediainfo[1],mediainfo[2],mediainfo[3],stream_type='LIVE',metadata=metadata)
-    bubbleupnp.block_until_active()
-    sleep(1)
-    bubbleupnp.play()
-    cast.disconnect()
+def deviceplay(info:CastInfo,mediainfo:list) -> bool:
+    try:
+        cast = pychromecast.get_chromecast_from_host(
+            [info.host, info.port, info.uuid, info.model_name, info.friendly_name])
+        bubbleupnp = BubbleUPNPController()
+        cast.wait(3)
+        cast.register_handler(bubbleupnp)
+        bubbleupnp.launch()
+        metadata = {'title':mediainfo[3],'metadataType':3}
+        bubbleupnp.play_media(mediainfo[1],mediainfo[2],mediainfo[3],stream_type='LIVE',metadata=metadata)
+        bubbleupnp.block_until_active()
+        bubbleupnp.play()
+        cast.disconnect()
+        return True
+    except:
+        return False
 
-def devicestop(info:CastInfo):
-    cast = pychromecast.get_chromecast_from_host(
-        [info.host, info.port, info.uuid, info.model_name, info.friendly_name])
-    cast.wait(3)
-    sleep(2)
-    cast.quit_app()
-    cast.disconnect()
+def devicestop(info:CastInfo) -> bool:
+    try:
+        cast = pychromecast.get_chromecast_from_host(
+            [info.host, info.port, info.uuid, info.model_name, info.friendly_name])
+        cast.wait(3)
+        cast.quit_app()
+        cast.disconnect()
+        return True
+    except:
+        return False
+
+def devicestatus(info:CastInfo) -> bool:
+    try:
+        cast = pychromecast.get_chromecast_from_host(
+            [info.host, info.port, info.uuid, info.model_name, info.friendly_name])
+        cast.wait(3)
+        result = cast.is_idle
+        cast.disconnect()
+        return result
+    except:
+        return False
 
 ##########tg###########
 def start(update: Update, context: CallbackContext) -> None:
@@ -51,25 +67,27 @@ def status(update: Update, context: CallbackContext) -> None:
     if device_list.count == 0:
          update.message.reply_text('no device available')
          return
-
     keyboard = []
+    device_avl = ""
     for device in device_list:
-        data = ["stop", device]
-        keyboard.append([InlineKeyboardButton(device.friendly_name, callback_data=data)])
-
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    update.message.reply_text("stop playing on:", reply_markup=reply_markup)
+        device_avl = device_avl + "\n- " + device.friendly_name
+        if not devicestatus(device):
+            data = ["stop", device]
+            keyboard.append([InlineKeyboardButton(device.friendly_name, callback_data=data)])
+    if keyboard == []:
+        update.message.reply_text(f"Available device:{device_avl}")
+    else:
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        update.message.reply_text(f"Available device:{device_avl}\nStop the current playback on:", reply_markup=reply_markup)
 
 def urlhandler(update: Update, context: CallbackContext) -> None:
     device_list = devicelist()
     if device_list.count == 0:
         update.message.reply_text('no device available')
         return
-
     url = update.message.text
     if re.match('^https?://radio.garden/listen/.+/.{8}$',url):
         url = 'https://radio.garden/api/ara/content/listen/'+url[-8:]+'/channel.mp3'
-
     mediainfo = parseurl(url)
     if mediainfo[0] == 1:
         update.message.reply_text('bad url')
@@ -77,12 +95,10 @@ def urlhandler(update: Update, context: CallbackContext) -> None:
     if not mediainfo[2].startswith('audio'):
         update.message.reply_text('not an audio url')
         return
-
     keyboard = []
     for device in device_list:
         data = ["play", device, mediainfo]
         keyboard.append([InlineKeyboardButton(device.friendly_name, callback_data=data)])
-
     reply_markup = InlineKeyboardMarkup(keyboard)
     update.message.reply_text("Play "+mediainfo[3]+" on:", reply_markup=reply_markup)
 
@@ -91,11 +107,15 @@ def btnhandler(update: Update, context: CallbackContext) -> None:
     query.answer()
     data = query.data
     if data[0] == 'play':
-        deviceplay(data[1],data[2])
-        query.edit_message_text(text=f"playing {data[2][3]} on {data[1].friendly_name}")
+        if deviceplay(data[1],data[2]):
+            query.edit_message_text(text=f"playing {data[2][3]} on {data[1].friendly_name}")
+        else:
+            query.edit_message_text(text=f"operation failed")
     if data[0] == 'stop':
-        devicestop(data[1])
-        query.edit_message_text(text=f"playing on {data[1].friendly_name} has been stopped")
+        if devicestop(data[1]):
+            query.edit_message_text(text=f"playing on {data[1].friendly_name} has been stopped")
+        else:
+            query.edit_message_text(text=f"operation failed")
 
 ##########etc###########
 def parseurl(url: str) -> list:
@@ -116,7 +136,6 @@ def main():
             print(env + ' not found')
             exit(1)
     del env
-
     updater = Updater(getenv('tgtoken'), arbitrary_callback_data=True)
     idflt = Filters.chat(int(getenv('tgchatid')))
     urlflt = Filters.regex(r'^https?:\/\/.+$')
