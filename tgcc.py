@@ -81,12 +81,12 @@ def status(update: Update, context: CallbackContext) -> None:
         update.message.reply_text(f"Available device:{device_avl}\nStop the current playback on:", reply_markup=reply_markup)
 
 def urlhandler(update: Update, context: CallbackContext) -> None:
-    device_list = devicelist()
-    if device_list.count == 0:
-        update.message.reply_text('no device available')
+    urlmatch = re.match('^.*(https?://[\S]+).*$',update.message.text,re.I)
+    if not urlmatch:
+        update.message.reply_text("Show me the URL")
         return
-    url = update.message.text
-    if re.match('^https?://radio.garden/listen/.+/.{8}$',url):
+    url = urlmatch.group(1)
+    if re.match('^https?://radio.garden/listen/.+/.{8}$',url,re.I):
         url = 'https://radio.garden/api/ara/content/listen/'+url[-8:]+'/channel.mp3'
     mediainfo = parseurl(url)
     if mediainfo[0] == 1:
@@ -94,6 +94,10 @@ def urlhandler(update: Update, context: CallbackContext) -> None:
         return
     if not mediainfo[2].startswith('audio'):
         update.message.reply_text('not an audio url')
+        return
+    device_list = devicelist()
+    if device_list.count == 0:
+        update.message.reply_text('no device available')
         return
     keyboard = []
     for device in device_list:
@@ -138,10 +142,9 @@ def main():
     del env
     updater = Updater(getenv('tgtoken'), arbitrary_callback_data=True)
     idflt = Filters.chat(int(getenv('tgchatid')))
-    urlflt = Filters.regex(r'^https?:\/\/.+$')
     updater.dispatcher.add_handler(CommandHandler('start', start, idflt))
     updater.dispatcher.add_handler(CommandHandler('status', status, idflt))
-    updater.dispatcher.add_handler(MessageHandler(urlflt & idflt, urlhandler))
+    updater.dispatcher.add_handler(MessageHandler(idflt, urlhandler))
     updater.dispatcher.add_handler(CallbackQueryHandler(btnhandler))
     updater.start_polling()
     updater.idle()
